@@ -15,8 +15,14 @@ use objc2_core_foundation::{CGPoint, CGSize};
 use objc2_core_graphics::{CGDisplayBounds, CGDisplayIsActive, CGDisplayIsOnline};
 use objc2_foundation::{NSArray, NSString};
 
-/// Vendor id every display this tool makes reports ("vd").
-const VENDOR: u32 = 0x7664;
+/// The display's fixed identity. macOS files a display's arrangement —
+/// position *and* the mode, density included — against vendor, product and
+/// serial, so the one display this tool makes always comes back as the same
+/// screen, wherever it was left.
+const VENDOR: u32 = 0x7664; // "vd"
+const PRODUCT: u32 = 0x0001;
+const SERIAL: u32 = 0x0001;
+const NAME: &str = "vdisplay";
 
 /// Physical density the descriptor claims. 2x sits near the top of the window
 /// macOS treats as Retina; 1x well below it.
@@ -81,17 +87,6 @@ impl Spec {
         spec.validate()?;
         Ok(spec)
     }
-
-    /// Serial number for this spec.
-    ///
-    /// macOS files a display's arrangement — position *and* the mode, density
-    /// included — against vendor, product and serial, and restores it when that
-    /// identity reappears. Deriving the serial from the spec means a size or
-    /// density never inherits a mode remembered for a different one, while the
-    /// same spec comes back where it was left.
-    fn serial(self) -> u32 {
-        self.width * 100_000 + self.height * 10 + self.scale()
-    }
 }
 
 /// A live virtual display. Dropping it removes the screen.
@@ -99,13 +94,12 @@ pub struct VirtualDisplay {
     _handle: Retained<AnyObject>,
     pub id: u32,
     pub spec: Spec,
-    pub slot: u32,
 }
 
 impl VirtualDisplay {
-    /// Create `spec` in `slot`, which becomes the product id so two displays of
-    /// the same spec are still two identities.
-    pub fn create(spec: Spec, slot: u32) -> anyhow::Result<Self> {
+    /// Create the display at `spec`. Only one may exist at a time: a second
+    /// would share its identity.
+    pub fn create(spec: Spec) -> anyhow::Result<Self> {
         spec.validate()?;
         let pixels = spec.pixels();
         let dpi = if spec.hidpi { DPI_2X } else { DPI_1X };
@@ -113,7 +107,7 @@ impl VirtualDisplay {
             f64::from(pixels.0) / dpi * 25.4,
             f64::from(pixels.1) / dpi * 25.4,
         );
-        let descriptor = descriptor(spec, slot, pixels, mm)?;
+        let descriptor = descriptor(pixels, mm)?;
 
         let class = class("CGVirtualDisplay")?;
         let allocated: Allocated<AnyObject> = unsafe { msg_send![class, alloc] };
@@ -133,19 +127,17 @@ impl VirtualDisplay {
             spec.scale()
         );
         eprintln!(
-            "vdisplay: created display {id}: {}x{} points at {}x ({}x{} pixels, serial {}, slot {slot})",
+            "vdisplay: created display {id}: {}x{} points at {}x ({}x{} pixels)",
             spec.width,
             spec.height,
             spec.scale(),
             pixels.0,
-            pixels.1,
-            spec.serial()
+            pixels.1
         );
         Ok(Self {
             _handle: display,
             id,
             spec,
-            slot,
         })
     }
 
@@ -176,20 +168,10 @@ fn class(name: &str) -> anyhow::Result<&'static AnyClass> {
     })
 }
 
-fn descriptor(
-    spec: Spec,
-    slot: u32,
-    pixels: (u32, u32),
-    mm: (f64, f64),
-) -> anyhow::Result<Retained<AnyObject>> {
+fn descriptor(pixels: (u32, u32), mm: (f64, f64)) -> anyhow::Result<Retained<AnyObject>> {
     let class = class("CGVirtualDisplayDescriptor")?;
     let descriptor: Retained<AnyObject> = unsafe { msg_send![class, new] };
-    let name = NSString::from_str(&format!(
-        "vdisplay {}x{}@{}x",
-        spec.width,
-        spec.height,
-        spec.scale()
-    ));
+    let name = NSString::from_str(NAME);
     unsafe {
         let _: () = msg_send![&*descriptor, setName: &*name];
         let _: () = msg_send![&*descriptor, setMaxPixelsWide: pixels.0];
@@ -201,8 +183,8 @@ fn descriptor(
         let _: () = msg_send![&*descriptor, setBluePrimary: CGPoint::new(0.1500, 0.0600)];
         let _: () = msg_send![&*descriptor, setWhitePoint: CGPoint::new(0.3127, 0.3290)];
         let _: () = msg_send![&*descriptor, setVendorID: VENDOR];
-        let _: () = msg_send![&*descriptor, setProductID: slot];
-        let _: () = msg_send![&*descriptor, setSerialNum: spec.serial()];
+        let _: () = msg_send![&*descriptor, setProductID: PRODUCT];
+        let _: () = msg_send![&*descriptor, setSerialNum: SERIAL];
     }
     set_queue(&descriptor);
     Ok(descriptor)
@@ -264,13 +246,5 @@ mod tests {
         assert_eq!(spec, Spec { width: 1280, height: 800, hidpi: false });
         assert!(Spec::from_arg("1280x800@3").is_err());
         assert!(Spec::from_arg("1280x800").is_err());
-    }
-
-    #[test]
-    fn serials_differ_by_size_and_density() {
-        let a = Spec { width: 1920, height: 1080, hidpi: true };
-        assert_ne!(a.serial(), Spec { hidpi: false, ..a }.serial());
-        assert_ne!(a.serial(), Spec { height: 1200, ..a }.serial());
-        assert_eq!(a.serial(), 1920 * 100_000 + 1080 * 10 + 2);
     }
 }

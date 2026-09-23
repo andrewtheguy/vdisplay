@@ -1,10 +1,10 @@
 # vdisplay
 
-A macOS menu-bar tool that adds virtual screens at a chosen size (in points)
+A macOS menu-bar tool that adds one virtual screen at a chosen size (in points)
 and density (1x or 2x), using the private `CGVirtualDisplay` API. It is for
 multi-display QA on a Mac that has no second monitor.
 
-Each display belongs to the process: **Remove**, **Quit**, or a crash takes it
+The display belongs to the process: **Remove**, **Quit**, or a crash takes it
 away. Nothing is saved between runs.
 
 ## Build and run
@@ -15,22 +15,24 @@ the `macsandbox` tmux session:
 ```sh
 scripts/bundle.sh                  # builds dist/vdisplay.app (Apple Silicon)
 open dist/vdisplay.app             # menu bar only
-open dist/vdisplay.app --args 1920x1080@2 1280x800@1   # also create these at launch
+open dist/vdisplay.app --args 1440x900@2   # also create the display at launch
 ```
 
 It has no Dock icon; it lives only in the menu bar.
 
-The menu-bar icon (two screens) lists the displays with their current size,
-and has **Add Display…**: a dialog for width, height and density.
+The menu-bar icon (two screens) shows the display with its current size and
+offers to remove it. With no display, it has **Add Display…**: a dialog for
+width, height and density (1440x900 at 2x to start). Only one display exists at
+a time; to change its size, remove it and add it again.
 
 ## How it behaves
 
 - The mode is listed in points. With 2x, macOS backs it with twice the pixels
   on each axis. `maxPixels` is set to exactly `points × scale`.
-- A display's identity is vendor `0x7664`, the product is the slot number,
-  and the serial comes from the spec. macOS remembers a display's arrangement,
-  including its density, against that identity. A new size or density therefore
-  starts fresh, while a repeated spec returns to where it was left.
+- The display's identity is fixed: name `vdisplay`, vendor `0x7664`, product
+  `0x0001`, serial `0x0001`, whatever its size. macOS remembers a display's
+  arrangement against that identity, so it always comes back as the same
+  screen, in the position where it was left.
 
 ## Releases
 
