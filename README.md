@@ -13,10 +13,12 @@ Run it inside the Mac's desktop (GUI) session. On macvm, that is a window of
 the `macsandbox` tmux session:
 
 ```sh
-cargo build --release
-./target/release/vdisplay                     # menu bar only
-./target/release/vdisplay 1920x1080@2 1280x800@1   # also create these at launch
+scripts/bundle.sh                  # builds dist/vdisplay.app (Apple Silicon)
+open dist/vdisplay.app             # menu bar only
+open dist/vdisplay.app --args 1920x1080@2 1280x800@1   # also create these at launch
 ```
+
+It has no Dock icon; it lives only in the menu bar.
 
 The menu-bar icon (two screens) lists the displays with their current size,
 and has **Add Display…**: a dialog for width, height and density.
@@ -33,7 +35,7 @@ and has **Add Display…**: a dialog for width, height and density.
 ## Releases
 
 Push a `vX.Y.Z` tag that matches the version in `Cargo.toml`. The `release`
-workflow builds a universal (arm64 + x86-64) binary and attaches it to the
-GitHub release. The binary is unsigned, so remove the quarantine flag from a
-downloaded copy before running it:
-`xattr -d com.apple.quarantine vdisplay`.
+workflow builds `vdisplay.app` for Apple Silicon, zipped, and attaches it to the
+GitHub release. The app is only ad-hoc signed, so clear the quarantine flag on
+a downloaded copy before opening it:
+`xattr -dr com.apple.quarantine vdisplay.app`.
