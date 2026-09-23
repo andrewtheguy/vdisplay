@@ -15,7 +15,7 @@ Run it inside the Mac's desktop (GUI) session. On macvm, that is a window of
 the `macsandbox` tmux session:
 
 ```sh
-scripts/bundle.sh                  # builds dist/vdisplay.app (Apple Silicon)
+scripts/bundle.sh                  # builds dist/vdisplay.app and a .dmg (Apple Silicon)
 open dist/vdisplay.app             # display at the saved size
 open dist/vdisplay.app --args 1280x800@1   # this size for this run only
 ```
@@ -43,7 +43,8 @@ size.
 ## Releases
 
 Push a `vX.Y.Z` tag that matches the version in `Cargo.toml`. The `release`
-workflow builds `vdisplay.app` for Apple Silicon, zipped, and attaches it to the
-GitHub release. The app is only ad-hoc signed, so clear the quarantine flag on
-a downloaded copy before opening it:
-`xattr -dr com.apple.quarantine vdisplay.app`.
+workflow builds `vdisplay.app` for Apple Silicon, packs it into a `.dmg`, and
+attaches that to the GitHub release. Open the image and drag the app onto
+Applications. The app is only ad-hoc signed, so clear the quarantine flag on
+the copied app before opening it:
+`xattr -dr com.apple.quarantine /Applications/vdisplay.app`.

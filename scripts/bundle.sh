@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build vdisplay.app for Apple Silicon and zip it into dist/.
+# Build vdisplay.app for Apple Silicon and pack it into a disk image in dist/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,5 +17,12 @@ sed "s/@VERSION@/$version/g" packaging/Info.plist > "$app/Contents/Info.plist"
 codesign --force --sign - "$app"
 codesign --verify --strict "$app"
 
-ditto -c -k --keepParent "$app" "dist/vdisplay-v$version-macos-arm64.zip"
-echo "dist/vdisplay-v$version-macos-arm64.zip"
+# The image holds the app and an Applications link to drag it onto.
+dmg="dist/vdisplay-v$version-macos-arm64.dmg"
+stage=dist/dmg
+mkdir -p "$stage"
+cp -R "$app" "$stage/"
+ln -s /Applications "$stage/Applications"
+hdiutil create -volname vdisplay -srcfolder "$stage" -fs HFS+ -format UDZO -ov "$dmg"
+rm -rf "$stage"
+echo "$dmg"
