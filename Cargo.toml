@@ -1,6 +1,6 @@
 [package]
 name = "vdisplay"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 publish = false
 description = "Menu-bar tool that adds CGVirtualDisplay screens to a Mac at a chosen size and density"
