@@ -1,10 +1,10 @@
-//! Menu-bar tool that adds virtual screens to a Mac at a chosen size and density.
+//! Menu-bar tool that adds one virtual screen to a Mac at a chosen size and density.
 //!
-//! Every display belongs to this process: Remove or Quit takes it away, and so
+//! The display belongs to this process: Remove or Quit takes it away, and so
 //! does a crash. Nothing is saved between runs.
 //!
-//! Arguments of the form `WIDTHxHEIGHT@SCALE` (points, scale 1 or 2) create
-//! displays at launch.
+//! An argument of the form `WIDTHxHEIGHT@SCALE` (points, scale 1 or 2) creates
+//! the display at launch.
 
 mod display;
 
@@ -23,7 +23,7 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 use display::{Spec, VirtualDisplay};
 
 struct Ivars {
-    displays: RefCell<Vec<VirtualDisplay>>,
+    display: RefCell<Option<VirtualDisplay>>,
     /// What the dialog opens with: the last spec asked for.
     last: RefCell<Spec>,
     item: OnceCell<Retained<NSStatusItem>>,
@@ -66,18 +66,8 @@ define_class!(
         }
 
         #[unsafe(method(removeDisplay:))]
-        fn remove_display(&self, sender: Option<&AnyObject>) {
-            let Some(sender) = sender else { return };
-            let id: isize = unsafe { msg_send![sender, tag] };
-            self.ivars()
-                .displays
-                .borrow_mut()
-                .retain(|d| d.id as isize != id);
-        }
-
-        #[unsafe(method(removeAll:))]
-        fn remove_all(&self, _sender: Option<&AnyObject>) {
-            self.ivars().displays.borrow_mut().clear();
+        fn remove_display(&self, _sender: Option<&AnyObject>) {
+            self.ivars().display.borrow_mut().take();
         }
     }
 );
@@ -85,10 +75,10 @@ define_class!(
 impl Controller {
     fn new(mtm: MainThreadMarker) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(Ivars {
-            displays: RefCell::new(Vec::new()),
+            display: RefCell::new(None),
             last: RefCell::new(Spec {
-                width: 1920,
-                height: 1080,
+                width: 1440,
+                height: 900,
                 hidpi: true,
             }),
             item: OnceCell::new(),
@@ -118,11 +108,9 @@ impl Controller {
     }
 
     fn create(&self, spec: Spec) -> anyhow::Result<()> {
-        let mut displays = self.ivars().displays.borrow_mut();
-        let slot = (1..)
-            .find(|s| displays.iter().all(|d| d.slot != *s))
-            .expect("a free slot");
-        displays.push(VirtualDisplay::create(spec, slot)?);
+        let mut display = self.ivars().display.borrow_mut();
+        anyhow::ensure!(display.is_none(), "there is already a display; remove it first");
+        *display = Some(VirtualDisplay::create(spec)?);
         *self.ivars().last.borrow_mut() = spec;
         Ok(())
     }
@@ -130,25 +118,23 @@ impl Controller {
     fn rebuild(&self, menu: &NSMenu) {
         let mtm = MainThreadMarker::from(self);
         menu.removeAllItems();
-        let displays = self.ivars().displays.borrow();
-        if displays.is_empty() {
-            menu.addItem(&self.item(mtm, "No virtual displays", None, 0));
-        }
-        for d in displays.iter() {
-            let title = format!(
-                "Remove display {}: {}x{} pt @{}x ({})",
-                d.id,
-                d.spec.width,
-                d.spec.height,
-                d.spec.scale(),
-                d.status()
-            );
-            menu.addItem(&self.item(mtm, &title, Some(sel!(removeDisplay:)), d.id as isize));
-        }
-        menu.addItem(&NSMenuItem::separatorItem(mtm));
-        menu.addItem(&self.item(mtm, "Add Display…", Some(sel!(addDisplay:)), 0));
-        if !displays.is_empty() {
-            menu.addItem(&self.item(mtm, "Remove All", Some(sel!(removeAll:)), 0));
+        match &*self.ivars().display.borrow() {
+            None => {
+                menu.addItem(&self.item(mtm, "No virtual display", None));
+                menu.addItem(&NSMenuItem::separatorItem(mtm));
+                menu.addItem(&self.item(mtm, "Add Display…", Some(sel!(addDisplay:))));
+            }
+            Some(d) => {
+                let title = format!(
+                    "Remove display {}: {}x{} pt @{}x ({})",
+                    d.id,
+                    d.spec.width,
+                    d.spec.height,
+                    d.spec.scale(),
+                    d.status()
+                );
+                menu.addItem(&self.item(mtm, &title, Some(sel!(removeDisplay:))));
+            }
         }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         let quit = unsafe {
@@ -168,7 +154,6 @@ impl Controller {
         mtm: MainThreadMarker,
         title: &str,
         action: Option<Sel>,
-        tag: isize,
     ) -> Retained<NSMenuItem> {
         let item = unsafe {
             NSMenuItem::initWithTitle_action_keyEquivalent(
@@ -180,7 +165,6 @@ impl Controller {
         };
         let target: &AnyObject = self;
         unsafe { item.setTarget(Some(target)) };
-        item.setTag(tag);
         item.setEnabled(action.is_some());
         item
     }
@@ -294,11 +278,16 @@ fn main() {
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
     let controller = Controller::new(mtm);
     controller.install(mtm);
-    for arg in std::env::args().skip(1) {
-        if let Err(err) = Spec::from_arg(&arg).and_then(|spec| controller.create(spec)) {
-            eprintln!("vdisplay: {arg}: {err:#}");
-            std::process::exit(2);
-        }
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.len() > 1 {
+        eprintln!("vdisplay: makes only one display; got {} specs", args.len());
+        std::process::exit(2);
+    }
+    if let Some(arg) = args.first()
+        && let Err(err) = Spec::from_arg(arg).and_then(|spec| controller.create(spec))
+    {
+        eprintln!("vdisplay: {arg}: {err:#}");
+        std::process::exit(2);
     }
     app.run();
 }
