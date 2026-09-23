@@ -29,3 +29,11 @@ and has **Add Display…**: a dialog for width, height and density.
   and the serial comes from the spec. macOS remembers a display's arrangement,
   including its density, against that identity. A new size or density therefore
   starts fresh, while a repeated spec returns to where it was left.
+
+## Releases
+
+Push a `vX.Y.Z` tag that matches the version in `Cargo.toml`. The `release`
+workflow builds a universal (arm64 + x86-64) binary and attaches it to the
+GitHub release. The binary is unsigned, so remove the quarantine flag from a
+downloaded copy before running it:
+`xattr -d com.apple.quarantine vdisplay`.
