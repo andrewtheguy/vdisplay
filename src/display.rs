@@ -37,6 +37,11 @@ pub struct Spec {
 }
 
 impl Spec {
+    pub const DEFAULT: Self = Self {
+        width: 1440,
+        height: 900,
+        hidpi: true,
+    };
     pub const MIN: (u32, u32) = (640, 480);
     /// Largest framebuffer edge accepted, in pixels.
     pub const MAX_PIXELS: u32 = 8192;
@@ -93,12 +98,15 @@ impl Spec {
 pub struct VirtualDisplay {
     _handle: Retained<AnyObject>,
     pub id: u32,
-    pub spec: Spec,
 }
 
 impl VirtualDisplay {
     /// Create the display at `spec`. Only one may exist at a time: a second
     /// would share its identity.
+    ///
+    /// `id` is the WindowServer's `CGDirectDisplayID`, an opaque token and not
+    /// the screen's number: it climbs as virtual displays come and go in the
+    /// login session, so it is logged but never shown as "display N".
     pub fn create(spec: Spec) -> anyhow::Result<Self> {
         spec.validate()?;
         let pixels = spec.pixels();
@@ -137,7 +145,6 @@ impl VirtualDisplay {
         Ok(Self {
             _handle: display,
             id,
-            spec,
         })
     }
 

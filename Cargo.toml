@@ -1,9 +1,9 @@
 [package]
 name = "vdisplay"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 publish = false
-description = "Menu-bar tool that adds CGVirtualDisplay screens to a Mac at a chosen size and density"
+description = "Menu-bar tool that adds one CGVirtualDisplay screen to a Mac at a chosen size and density"
 
 [dependencies]
 anyhow = "1"
@@ -37,4 +37,5 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "NSArray",
     "NSGeometry",
     "NSString",
+    "NSUserDefaults",
 ] }
